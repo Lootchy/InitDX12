@@ -5,51 +5,20 @@
 #include <stdexcept>
 #include <WindowsX.h>
 #include <cassert>
+#include <crtdbg.h>
+#include <exception>
 #include "d3dx12.h"
 
-#pragma comment(lib, "d3d12.lib")
+
+#pragma comment(lib,"d3dcompiler.lib")
+#pragma comment(lib, "D3D12.lib")
 #pragma comment(lib, "dxgi.lib") 
-
-inline void ThrowIfFailed(HRESULT hr)
-{
-    if (FAILED(hr)) {
-        throw std::runtime_error("HRESULT failed.");
-    }
-}
-
-void CreateSwapChain(IDXGISwapChain** SwapChain, DXGI_FORMAT BackBufferFormat, bool f4xMsaaState, const int SwapChainBufferCount, HWND hMainWnd, ID3D12CommandQueue* CommandQueue, IDXGIFactory4* dxgiFactory)
-{
-    // Release the previous swapchain we will be recreating.
-    (*SwapChain)->Release();
-
-    DXGI_SWAP_CHAIN_DESC sd;
-    sd.BufferDesc.Width = 800;
-    sd.BufferDesc.Height = 600;
-    sd.BufferDesc.RefreshRate.Numerator = 60;
-    sd.BufferDesc.RefreshRate.Denominator = 1;
-    sd.BufferDesc.Format = BackBufferFormat;
-    sd.BufferDesc.ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED;
-    sd.BufferDesc.Scaling = DXGI_MODE_SCALING_UNSPECIFIED;
-    sd.SampleDesc.Count = f4xMsaaState ? 4 : 1;
-    sd.SampleDesc.Quality = f4xMsaaState ? (f4xMsaaState - 1) : 0;
-    sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-    sd.BufferCount = SwapChainBufferCount;
-    sd.OutputWindow = hMainWnd;
-    sd.Windowed = true;
-    sd.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
-    sd.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
-
-    // Note: Swap chain uses queue to perform flush.
-    ThrowIfFailed(dxgiFactory->CreateSwapChain(
-        CommandQueue,
-        &sd,
-        SwapChain));
-}
 
 
 
 int main()
 {
+    std::wstring mMainWndCaption = L"d3d App";
     ID3D12Device* md3dDevice;
     IDXGIFactory4* mdxgiFactory;
     ID3D12Fence* mFence;
@@ -64,7 +33,7 @@ int main()
 
     bool      m4xMsaaState = false;   
     UINT      m4xMsaaQuality = 0;     
-
+    HINSTANCE mhAppInst = nullptr;
     HWND      mhMainWnd = nullptr;
 
     ID3D12DescriptorHeap* mRtvHeap;
@@ -79,11 +48,11 @@ int main()
 
 #if defined(DEBUG) || defined(_DEBUG)
     ID3D12Debug* debugController;
-    ThrowIfFailed(D3D12GetDebugInterface(IID_PPV_ARGS(&debugController)));
+    D3D12GetDebugInterface(IID_PPV_ARGS(&debugController));
     debugController->EnableDebugLayer();
 #endif
 
-    ThrowIfFailed(CreateDXGIFactory1(IID_PPV_ARGS(&mdxgiFactory)));
+    CreateDXGIFactory1(IID_PPV_ARGS(&mdxgiFactory));
 
    
     HRESULT hardwareResult = D3D12CreateDevice(
@@ -94,18 +63,18 @@ int main()
    
     if (FAILED(hardwareResult)) {
         IDXGIAdapter* pWarpAdapter;
-        ThrowIfFailed(mdxgiFactory->EnumWarpAdapter(IID_PPV_ARGS(&pWarpAdapter)));
+        mdxgiFactory->EnumWarpAdapter(IID_PPV_ARGS(&pWarpAdapter));
 
-        ThrowIfFailed(D3D12CreateDevice(
+        D3D12CreateDevice(
             pWarpAdapter,
             D3D_FEATURE_LEVEL_11_0,
-            IID_PPV_ARGS(&md3dDevice)));
+            IID_PPV_ARGS(&md3dDevice));
     }
 
     std::cout << "D3D12 Device cree avec succes!" << std::endl;
 
-    ThrowIfFailed(md3dDevice->CreateFence(
-        0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&mFence)));
+    md3dDevice->CreateFence(
+        0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&mFence));
     UINT mRtvDescriptorSize = md3dDevice->GetDescriptorHandleIncrementSize(
             D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 
@@ -120,31 +89,50 @@ int main()
     msQualityLevels.SampleCount = 4;
     msQualityLevels.Flags = D3D12_MULTISAMPLE_QUALITY_LEVELS_FLAG_NONE;
     msQualityLevels.NumQualityLevels = 0;
-    ThrowIfFailed(md3dDevice->CheckFeatureSupport(
+    md3dDevice->CheckFeatureSupport(
         D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS,
         &msQualityLevels,
-        sizeof(msQualityLevels)));
+        sizeof(msQualityLevels));
     m4xMsaaQuality = msQualityLevels.NumQualityLevels;
     assert(m4xMsaaQuality > 0 && "Unexpected MSAA quality level.");
 
     D3D12_COMMAND_QUEUE_DESC queueDesc = {};
     queueDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
     queueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
-    ThrowIfFailed(md3dDevice->CreateCommandQueue(&queueDesc, IID_PPV_ARGS(&mCommandQueue)));
+    md3dDevice->CreateCommandQueue(&queueDesc, IID_PPV_ARGS(&mCommandQueue));
 
-    ThrowIfFailed(md3dDevice->CreateCommandAllocator(
+    md3dDevice->CreateCommandAllocator(
         D3D12_COMMAND_LIST_TYPE_DIRECT,
-        IID_PPV_ARGS(&mDirectCmdListAlloc)));
+        IID_PPV_ARGS(&mDirectCmdListAlloc));
 
-    ThrowIfFailed(md3dDevice->CreateCommandList(
+    md3dDevice->CreateCommandList(
         0,
         D3D12_COMMAND_LIST_TYPE_DIRECT,
         mDirectCmdListAlloc,
         nullptr,
-        IID_PPV_ARGS(&mCommandList)));
+        IID_PPV_ARGS(&mCommandList));
     mCommandList->Close();
 
-    mSwapChain->Release();
+    WNDCLASS wc = {};
+    wc.lpfnWndProc = DefWindowProc;
+    wc.hInstance = mhAppInst;
+    wc.lpszClassName = L"MainWnd";
+    if (!RegisterClass(&wc)) {
+        MessageBox(0, L"Failed to register window class", 0, 0);
+        return -1;
+    }
+
+    mhMainWnd = CreateWindow(L"MainWnd", mMainWndCaption.c_str(),
+        WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, 800, 600, 0, 0, mhAppInst, 0);
+
+    if (!mhMainWnd) {
+        MessageBox(0, L"Failed to create window", 0, 0);
+        return -1;
+    }
+    ShowWindow(mhMainWnd, SW_SHOW);
+    UpdateWindow(mhMainWnd);
+
+    mSwapChain = nullptr;
 
     DXGI_SWAP_CHAIN_DESC sd;
     sd.BufferDesc.Width = 800;
@@ -155,7 +143,7 @@ int main()
     sd.BufferDesc.ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED;
     sd.BufferDesc.Scaling = DXGI_MODE_SCALING_UNSPECIFIED;
     sd.SampleDesc.Count = m4xMsaaState ? 4 : 1;
-    sd.SampleDesc.Quality = m4xMsaaState ? (m4xMsaaState - 1) : 0;
+    sd.SampleDesc.Quality = m4xMsaaState ? (m4xMsaaQuality - 1) : 0;
     sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
     sd.BufferCount = SwapChainBufferCount;
     sd.OutputWindow = mhMainWnd;
@@ -164,10 +152,10 @@ int main()
     sd.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
 
     // Note: Swap chain uses queue to perform flush.
-    ThrowIfFailed(mdxgiFactory->CreateSwapChain(
+    mdxgiFactory->CreateSwapChain(
         mCommandQueue,
         &sd,
-        &mSwapChain));
+        &mSwapChain);
 
 
     D3D12_DESCRIPTOR_HEAP_DESC rtvHeapDesc;
@@ -175,8 +163,8 @@ int main()
     rtvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
     rtvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
     rtvHeapDesc.NodeMask = 0;
-    ThrowIfFailed(md3dDevice->CreateDescriptorHeap(
-        &rtvHeapDesc, IID_PPV_ARGS(&mRtvHeap)));
+    md3dDevice->CreateDescriptorHeap(
+        &rtvHeapDesc, IID_PPV_ARGS(&mRtvHeap));
 
 
     D3D12_DESCRIPTOR_HEAP_DESC dsvHeapDesc;
@@ -184,19 +172,13 @@ int main()
     dsvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
     dsvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
     dsvHeapDesc.NodeMask = 0;
-    ThrowIfFailed(md3dDevice->CreateDescriptorHeap(
-        &dsvHeapDesc, IID_PPV_ARGS(&mDsvHeap)));
-
-    CD3DX12_CPU_DESCRIPTOR_HANDLE dc = CD3DX12_CPU_DESCRIPTOR_HANDLE(
-        mRtvHeap->GetCPUDescriptorHandleForHeapStart(),
-        mCurrBackBuffer,
-        mRtvDescriptorSize);
+    md3dDevice->CreateDescriptorHeap(
+        &dsvHeapDesc, IID_PPV_ARGS(&mDsvHeap));
 
     CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHeapHandle(mRtvHeap->GetCPUDescriptorHandleForHeapStart());
-
     for (UINT i = 0; i < SwapChainBufferCount; i++)
     {
-        ThrowIfFailed(mSwapChain->GetBuffer(i, IID_PPV_ARGS(&mSwapChainBuffer[i])));
+        mSwapChain->GetBuffer(i, IID_PPV_ARGS(&mSwapChainBuffer[i]));
         md3dDevice->CreateRenderTargetView(mSwapChainBuffer[i], nullptr, rtvHeapHandle);
         rtvHeapHandle.Offset(1, mRtvDescriptorSize);
     }
@@ -226,20 +208,17 @@ int main()
     optClear.DepthStencil.Depth = 1.0f;
     optClear.DepthStencil.Stencil = 0;
 
-    CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
-        D3D12_HEAP_FLAG_NONE,
-        & depthStencilDesc,
-        D3D12_RESOURCE_STATE_COMMON,
-        & optClear,
-        IID_PPV_ARGS(&mDepthStencilBuffer);
+    CD3DX12_HEAP_PROPERTIES heapProperties(D3D12_HEAP_TYPE_DEFAULT);
 
-    ThrowIfFailed(md3dDevice->CreateCommittedResource(
-        &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
+    md3dDevice->CreateCommittedResource(
+        &heapProperties,
         D3D12_HEAP_FLAG_NONE,
         &depthStencilDesc,
         D3D12_RESOURCE_STATE_COMMON,
         &optClear,
-        IID_PPV_ARGS(&mDepthStencilBuffer)));
+        IID_PPV_ARGS(&mDepthStencilBuffer)
+    );
+
 
     // Create descriptor to mip level 0 of entire resource using the format of the resource.
     D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc;
@@ -247,14 +226,16 @@ int main()
     dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
     dsvDesc.Format = mDepthStencilFormat;
     dsvDesc.Texture2D.MipSlice = 0;
-    md3dDevice->CreateDepthStencilView(mDepthStencilBuffer, &dsvDesc, rtvHeapHandle);
+    md3dDevice->CreateDepthStencilView(mDepthStencilBuffer, &dsvDesc, mDsvHeap->GetCPUDescriptorHandleForHeapStart());
+
+    CD3DX12_RESOURCE_BARRIER depthStencilBarrier = CD3DX12_RESOURCE_BARRIER::Transition(mDepthStencilBuffer,
+        D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_DEPTH_WRITE);
 
     // Transition the resource from its initial state to be used as a depth buffer.
-    mCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(mDepthStencilBuffer,
-        D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_DEPTH_WRITE));
+    mCommandList->ResourceBarrier(1, &depthStencilBarrier);
 
     // Execute the resize commands.
-    ThrowIfFailed(mCommandList->Close());
+    mCommandList->Close();
     ID3D12CommandList* cmdsLists[] = { mCommandList };
     mCommandQueue->ExecuteCommandLists(_countof(cmdsLists), cmdsLists);
 
@@ -265,6 +246,15 @@ int main()
     mScreenViewport.MinDepth = 0.0f;
     mScreenViewport.MaxDepth = 1.0f;
 
+    MSG msg = {};
+    while (msg.message != WM_QUIT)
+    {
+        if (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE))
+        {
+            TranslateMessage(&msg);
+            DispatchMessage(&msg);
+        }
+    }
     return 0;
 }
 
