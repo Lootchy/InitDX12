@@ -7,6 +7,8 @@
 #include <cassert>
 #include <crtdbg.h>
 #include <exception>
+#include <DirectXMath.h>
+#include <DirectXColors.h> 
 #include "d3dx12.h"
 
 
@@ -45,6 +47,10 @@ int main()
     DXGI_FORMAT mDepthStencilFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
     ID3D12Resource* mDepthStencilBuffer;
     D3D12_VIEWPORT mScreenViewport;
+    D3D12_RECT mScissorRect;
+    UINT64 mCurrentFence = 0;
+
+    float clearColor[] = { 0.0f, 0.0f, 1.0f, 1.0f };
 
 #if defined(DEBUG) || defined(_DEBUG)
     ID3D12Debug* debugController;
@@ -132,6 +138,8 @@ int main()
     ShowWindow(mhMainWnd, SW_SHOW);
     UpdateWindow(mhMainWnd);
 
+    
+
     mSwapChain = nullptr;
 
     DXGI_SWAP_CHAIN_DESC sd;
@@ -190,12 +198,7 @@ int main()
     depthStencilDesc.Height = 600;
     depthStencilDesc.DepthOrArraySize = 1;
     depthStencilDesc.MipLevels = 1;
-
-    // Correction 11/12/2016: SSAO chapter requires an SRV to the depth buffer to read from 
-    // the depth buffer.  Therefore, because we need to create two views to the same resource:
-    //   1. SRV format: DXGI_FORMAT_R24_UNORM_X8_TYPELESS
-    //   2. DSV Format: DXGI_FORMAT_D24_UNORM_S8_UINT
-    // we need to create the depth buffer resource with a typeless format.  
+ 
     depthStencilDesc.Format = DXGI_FORMAT_R24G8_TYPELESS;
 
     depthStencilDesc.SampleDesc.Count = m4xMsaaState ? 4 : 1;
@@ -253,6 +256,70 @@ int main()
         {
             TranslateMessage(&msg);
             DispatchMessage(&msg);
+            
+
+            mCommandList->Reset(mDirectCmdListAlloc, nullptr);
+
+            CD3DX12_RESOURCE_BARRIER barrierToRenderTarget = CD3DX12_RESOURCE_BARRIER::Transition(
+                mSwapChainBuffer[mCurrBackBuffer],
+                D3D12_RESOURCE_STATE_PRESENT,
+                D3D12_RESOURCE_STATE_RENDER_TARGET
+            );
+
+            mCommandList->ResourceBarrier(1, &barrierToRenderTarget);
+
+
+            // Set the viewport and scissor rect.  This needs to be reset whenever the command list is reset.
+            mCommandList->RSSetViewports(1, &mScreenViewport);
+            mCommandList->RSSetScissorRects(1, &mScissorRect);
+
+            // Clear the back buffer and depth buffer.
+            mCommandList->ClearRenderTargetView(CD3DX12_CPU_DESCRIPTOR_HANDLE(
+                mRtvHeap->GetCPUDescriptorHandleForHeapStart(),
+                mCurrBackBuffer,
+                mRtvDescriptorSize), DirectX::Colors::LightSteelBlue, 0, nullptr);
+            mCommandList->ClearDepthStencilView(mDsvHeap->GetCPUDescriptorHandleForHeapStart(), D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, nullptr);
+
+            CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(
+                mRtvHeap->GetCPUDescriptorHandleForHeapStart(),
+                mCurrBackBuffer,
+                mRtvDescriptorSize
+            );
+
+            D3D12_CPU_DESCRIPTOR_HANDLE dsdew = mDsvHeap->GetCPUDescriptorHandleForHeapStart();
+            mCommandList->OMSetRenderTargets(1, &rtvHandle, true, &dsdew);
+
+            CD3DX12_RESOURCE_BARRIER barrierToPresent = CD3DX12_RESOURCE_BARRIER::Transition(
+                mSwapChainBuffer[mCurrBackBuffer],
+                D3D12_RESOURCE_STATE_RENDER_TARGET,
+                D3D12_RESOURCE_STATE_PRESENT
+            );
+
+            mCommandList->ResourceBarrier(1, &barrierToPresent);
+
+
+            mCommandList->Close();
+
+            ID3D12CommandList* cmdsLists[] = { mCommandList };
+            mCommandQueue->ExecuteCommandLists(_countof(cmdsLists), cmdsLists);
+
+            mSwapChain->Present(0, 0);
+            mCurrBackBuffer = (mCurrBackBuffer + 1) % SwapChainBufferCount;
+
+            mCurrentFence++;
+
+            mCommandQueue->Signal(mFence, mCurrentFence);
+
+            // Wait until the GPU has completed commands up to this fence point.
+            if (mFence->GetCompletedValue() < mCurrentFence)
+            {
+                HANDLE eventHandle = CreateEventEx(nullptr, nullptr, false, EVENT_ALL_ACCESS);
+
+
+                mFence->SetEventOnCompletion(mCurrentFence, eventHandle);
+                WaitForSingleObject(eventHandle, INFINITE);
+                CloseHandle(eventHandle);
+            }
         }
     }
     return 0;
