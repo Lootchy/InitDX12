@@ -1,5 +1,6 @@
 #include <d3d12.h>     
 #include "d3dApp.h"
+#include "Box.h"
 
 
 
@@ -7,8 +8,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE prevInstance, PSTR cmdLine, in
 {
     try
     {
-        d3dApp app(hInstance);
-        if (!app.Initialize())
+        Box app(hInstance);
+        if (!app.Init())
             return -1;
 
         return app.Run();

@@ -11,6 +11,7 @@
 #include <DirectXMath.h>
 #include <DirectXColors.h> 
 #include "d3dx12.h"
+#include "Box.h"
 
 #pragma comment(lib, "d3dcompiler.lib")
 #pragma comment(lib, "D3D12.lib")
@@ -19,39 +20,14 @@
 d3dApp::d3dApp(HINSTANCE hInstance)
     : mhAppInst(hInstance)
 {
-    if (!InitMainWindow())
-        throw std::runtime_error("Failed to initialize window.");
-
-    if (!InitDirect3D())
-        throw std::runtime_error("Failed to initialize Direct3D.");
 }
 
 d3dApp::~d3dApp()
 {
     if (md3dDevice != nullptr)
-        md3dDevice->Release();
-    if (mdxgiFactory != nullptr)
-        mdxgiFactory->Release();
-    if (mFence != nullptr)
-        mFence->Release();
-    if (mCommandQueue != nullptr)
-        mCommandQueue->Release();
-    if (mDirectCmdListAlloc != nullptr)
-        mDirectCmdListAlloc->Release();
-    if (mCommandList != nullptr)
-        mCommandList->Release();
-    if (mSwapChain != nullptr)
-        mSwapChain->Release();
-    if (mRtvHeap != nullptr)
-        mRtvHeap->Release();
-    if (mDsvHeap != nullptr)
-        mDsvHeap->Release();
-    for (int i = 0; i < SwapChainBufferCount; ++i)
-        if (mSwapChainBuffer[i] != nullptr)
-            mSwapChainBuffer[i]->Release();
-    if (mDepthStencilBuffer != nullptr)
-        mDepthStencilBuffer->Release();
+        FlushCommandQueue();
 }
+
 
 int d3dApp::Run()
 {
@@ -74,6 +50,13 @@ int d3dApp::Run()
 
 bool d3dApp::Initialize()
 {
+    if (!InitMainWindow())
+        throw std::runtime_error("Failed to initialize window.");
+
+    if (!InitDirect3D())
+        throw std::runtime_error("Failed to initialize Direct3D.");
+
+    OnResize();
     return true;
 }
 
@@ -86,88 +69,91 @@ void d3dApp::Draw()
 {
     mCommandList->Reset(mDirectCmdListAlloc, nullptr);
 
+    // Transition de la back buffer vers l'état RENDER_TARGET
     CD3DX12_RESOURCE_BARRIER barrierToRenderTarget = CD3DX12_RESOURCE_BARRIER::Transition(
         mSwapChainBuffer[mCurrBackBuffer],
         D3D12_RESOURCE_STATE_PRESENT,
         D3D12_RESOURCE_STATE_RENDER_TARGET
     );
-
     mCommandList->ResourceBarrier(1, &barrierToRenderTarget);
 
+    // Définir le viewport et le rectangle de découpage
     mCommandList->RSSetViewports(1, &mScreenViewport);
     mCommandList->RSSetScissorRects(1, &mScissorRect);
 
+    // Effacer la back buffer et le tampon de profondeur
     mCommandList->ClearRenderTargetView(CD3DX12_CPU_DESCRIPTOR_HANDLE(
         mRtvHeap->GetCPUDescriptorHandleForHeapStart(),
         mCurrBackBuffer,
         mRtvDescriptorSize), DirectX::Colors::LightSteelBlue, 0, nullptr);
     mCommandList->ClearDepthStencilView(mDsvHeap->GetCPUDescriptorHandleForHeapStart(), D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, nullptr);
 
+    // Définir les cibles de rendu
     CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(
         mRtvHeap->GetCPUDescriptorHandleForHeapStart(),
         mCurrBackBuffer,
         mRtvDescriptorSize
     );
-
     D3D12_CPU_DESCRIPTOR_HANDLE dsdew = mDsvHeap->GetCPUDescriptorHandleForHeapStart();
     mCommandList->OMSetRenderTargets(1, &rtvHandle, true, &dsdew);
 
+    // Transition de la back buffer vers l'état PRESENT
     CD3DX12_RESOURCE_BARRIER barrierToPresent = CD3DX12_RESOURCE_BARRIER::Transition(
         mSwapChainBuffer[mCurrBackBuffer],
         D3D12_RESOURCE_STATE_RENDER_TARGET,
         D3D12_RESOURCE_STATE_PRESENT
     );
-
     mCommandList->ResourceBarrier(1, &barrierToPresent);
 
+    // Fermer la commande list
     mCommandList->Close();
 
+    // Exécuter les commandes
     ID3D12CommandList* cmdsLists[] = { mCommandList };
     mCommandQueue->ExecuteCommandLists(_countof(cmdsLists), cmdsLists);
 
+    // Présenter la frame
     mSwapChain->Present(0, 0);
     mCurrBackBuffer = (mCurrBackBuffer + 1) % SwapChainBufferCount;
 
-    mCurrentFence++;
-
-    mCommandQueue->Signal(mFence, mCurrentFence);
-
-    if (mFence->GetCompletedValue() < mCurrentFence)
-    {
-        HANDLE eventHandle = CreateEventEx(nullptr, nullptr, false, EVENT_ALL_ACCESS);
-        mFence->SetEventOnCompletion(mCurrentFence, eventHandle);
-        WaitForSingleObject(eventHandle, INFINITE);
-        CloseHandle(eventHandle);
-    }
+    // Synchronisation GPU/CPU
+    FlushCommandQueue();
 }
 
 void d3dApp::OnResize()
 {
-    D3D12_DESCRIPTOR_HEAP_DESC rtvHeapDesc;
-    rtvHeapDesc.NumDescriptors = SwapChainBufferCount;
-    rtvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
-    rtvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
-    rtvHeapDesc.NodeMask = 0;
-    md3dDevice->CreateDescriptorHeap(
-        &rtvHeapDesc, IID_PPV_ARGS(&mRtvHeap));
+    assert(md3dDevice);
+    assert(mSwapChain);
+    assert(mDirectCmdListAlloc);
 
+    // Flush before changing any resources.
+    FlushCommandQueue();
 
-    D3D12_DESCRIPTOR_HEAP_DESC dsvHeapDesc;
-    dsvHeapDesc.NumDescriptors = 1;
-    dsvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
-    dsvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
-    dsvHeapDesc.NodeMask = 0;
-    md3dDevice->CreateDescriptorHeap(
-        &dsvHeapDesc, IID_PPV_ARGS(&mDsvHeap));
+    mCommandList->Reset(mDirectCmdListAlloc, nullptr);
+
+    // Release the previous resources we will be recreating.
+    for (int i = 0; i < SwapChainBufferCount; ++i)
+        mSwapChainBuffer[i] = nullptr;
+    mDepthStencilBuffer = nullptr;
+
+    // Resize the swap chain.
+    mSwapChain->ResizeBuffers(
+        SwapChainBufferCount,
+        800, 600,
+        mBackBufferFormat,
+        DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH);
+
+    mCurrBackBuffer = 0;
 
     CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHeapHandle(mRtvHeap->GetCPUDescriptorHandleForHeapStart());
     for (UINT i = 0; i < SwapChainBufferCount; i++)
     {
-        mSwapChain->GetBuffer(i, IID_PPV_ARGS(&mSwapChainBuffer[i]));
+        ThrowIfFailed(mSwapChain->GetBuffer(i, IID_PPV_ARGS(&mSwapChainBuffer[i])));
         md3dDevice->CreateRenderTargetView(mSwapChainBuffer[i], nullptr, rtvHeapHandle);
         rtvHeapHandle.Offset(1, mRtvDescriptorSize);
     }
 
+    // Create the depth/stencil buffer and view.
     D3D12_RESOURCE_DESC depthStencilDesc;
     depthStencilDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
     depthStencilDesc.Alignment = 0;
@@ -176,6 +162,11 @@ void d3dApp::OnResize()
     depthStencilDesc.DepthOrArraySize = 1;
     depthStencilDesc.MipLevels = 1;
 
+    // Correction 11/12/2016: SSAO chapter requires an SRV to the depth buffer to read from 
+    // the depth buffer.  Therefore, because we need to create two views to the same resource:
+    //   1. SRV format: DXGI_FORMAT_R24_UNORM_X8_TYPELESS
+    //   2. DSV Format: DXGI_FORMAT_D24_UNORM_S8_UINT
+    // we need to create the depth buffer resource with a typeless format.  
     depthStencilDesc.Format = DXGI_FORMAT_R24G8_TYPELESS;
 
     depthStencilDesc.SampleDesc.Count = m4xMsaaState ? 4 : 1;
@@ -187,18 +178,14 @@ void d3dApp::OnResize()
     optClear.Format = mDepthStencilFormat;
     optClear.DepthStencil.Depth = 1.0f;
     optClear.DepthStencil.Stencil = 0;
-
-    CD3DX12_HEAP_PROPERTIES heapProperties(D3D12_HEAP_TYPE_DEFAULT);
-
+    CD3DX12_HEAP_PROPERTIES dgt = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
     md3dDevice->CreateCommittedResource(
-        &heapProperties,
+        &dgt,
         D3D12_HEAP_FLAG_NONE,
         &depthStencilDesc,
         D3D12_RESOURCE_STATE_COMMON,
         &optClear,
-        IID_PPV_ARGS(&mDepthStencilBuffer)
-    );
-
+        IID_PPV_ARGS(&mDepthStencilBuffer));
 
     // Create descriptor to mip level 0 of entire resource using the format of the resource.
     D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc;
@@ -208,23 +195,28 @@ void d3dApp::OnResize()
     dsvDesc.Texture2D.MipSlice = 0;
     md3dDevice->CreateDepthStencilView(mDepthStencilBuffer, &dsvDesc, mDsvHeap->GetCPUDescriptorHandleForHeapStart());
 
-    CD3DX12_RESOURCE_BARRIER depthStencilBarrier = CD3DX12_RESOURCE_BARRIER::Transition(mDepthStencilBuffer,
-        D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_DEPTH_WRITE);
-
     // Transition the resource from its initial state to be used as a depth buffer.
-    mCommandList->ResourceBarrier(1, &depthStencilBarrier);
+    CD3DX12_RESOURCE_BARRIER zhtd = CD3DX12_RESOURCE_BARRIER::Transition(mDepthStencilBuffer,
+        D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+    mCommandList->ResourceBarrier(1, &zhtd);
 
     // Execute the resize commands.
-    mCommandList->Close();
+    ThrowIfFailed(mCommandList->Close());
     ID3D12CommandList* cmdsLists[] = { mCommandList };
     mCommandQueue->ExecuteCommandLists(_countof(cmdsLists), cmdsLists);
 
+    // Wait until resize is complete.
+    FlushCommandQueue();
+
+    // Update the viewport transform to cover the client area.
     mScreenViewport.TopLeftX = 0;
     mScreenViewport.TopLeftY = 0;
     mScreenViewport.Width = static_cast<float>(800);
     mScreenViewport.Height = static_cast<float>(600);
     mScreenViewport.MinDepth = 0.0f;
     mScreenViewport.MaxDepth = 1.0f;
+
+    mScissorRect = { 0, 0, 800, 600 };
 }
 
 bool d3dApp::InitMainWindow()
@@ -305,6 +297,30 @@ bool d3dApp::InitDirect3D()
 
     return true;
 }
+
+void d3dApp::FlushCommandQueue()
+{
+    mCurrentFence++;
+
+    // Add an instruction to the command queue to set a new fence point.  Because we 
+    // are on the GPU timeline, the new fence point won't be set until the GPU finishes
+    // processing all the commands prior to this Signal().
+    mCommandQueue->Signal(mFence, mCurrentFence);
+
+    // Wait until the GPU has completed commands up to this fence point.
+    if (mFence->GetCompletedValue() < mCurrentFence)
+    {
+        HANDLE eventHandle = CreateEventEx(nullptr, L"", false, EVENT_ALL_ACCESS);
+
+        // Fire event when GPU hits current fence.  
+        mFence->SetEventOnCompletion(mCurrentFence, eventHandle);
+
+        // Wait until the GPU hits current fence event is fired.
+        WaitForSingleObject(eventHandle, INFINITE);
+        CloseHandle(eventHandle);
+    }
+}
+
 
 void d3dApp::CreateCommandObjects()
 {

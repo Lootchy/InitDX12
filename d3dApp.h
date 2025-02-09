@@ -8,14 +8,16 @@
 #include <Windows.h>
 #include <DirectXMath.h>
 
+
+class Box;
 class d3dApp
 {
+    
 public:
     d3dApp(HINSTANCE hInstance);
     virtual ~d3dApp();
 
     int Run();
-
     virtual bool Initialize();
     virtual void Update();
     virtual void Draw();
@@ -24,6 +26,7 @@ public:
 protected:
     bool InitMainWindow();
     bool InitDirect3D();
+    void FlushCommandQueue();
     void CreateCommandObjects();
     void CreateSwapChain();
     void CreateRtvAndDsvDescriptorHeaps();
@@ -37,7 +40,7 @@ protected:
 
     ID3D12Device* md3dDevice = nullptr;
     IDXGIFactory4* mdxgiFactory = nullptr;
-    ID3D12Fence* mFence = nullptr;
+    ID3D12Fence* mFence;
     ID3D12CommandQueue* mCommandQueue = nullptr;
     ID3D12CommandAllocator* mDirectCmdListAlloc = nullptr;
     ID3D12GraphicsCommandList* mCommandList = nullptr;
@@ -66,6 +69,7 @@ protected:
     UINT m4xMsaaQuality = 0;
 
     float mClearColor[4] = { 0.0f, 0.0f, 1.0f, 1.0f };
+
 };
 
 #endif // D3DAPP_H
