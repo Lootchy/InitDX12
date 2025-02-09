@@ -31,7 +31,6 @@ protected:
     void CreateSwapChain();
     void CreateRtvAndDsvDescriptorHeaps();
     void CreateRenderTargetViews();
-    void CreateDepthStencilView();
 
     HINSTANCE mhAppInst;
     HWND      mhMainWnd;

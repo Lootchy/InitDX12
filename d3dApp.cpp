@@ -293,7 +293,6 @@ bool d3dApp::InitDirect3D()
     CreateSwapChain();
     CreateRtvAndDsvDescriptorHeaps();
     CreateRenderTargetViews();
-    CreateDepthStencilView();
 
     return true;
 }
@@ -395,59 +394,3 @@ void d3dApp::CreateRenderTargetViews()
     }
 }
 
-void d3dApp::CreateDepthStencilView()
-{
-    D3D12_RESOURCE_DESC depthStencilDesc;
-    depthStencilDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-    depthStencilDesc.Alignment = 0;
-    depthStencilDesc.Width = 800;
-    depthStencilDesc.Height = 600;
-    depthStencilDesc.DepthOrArraySize = 1;
-    depthStencilDesc.MipLevels = 1;
-    depthStencilDesc.Format = DXGI_FORMAT_R24G8_TYPELESS;
-    depthStencilDesc.SampleDesc.Count = m4xMsaaState ? 4 : 1;
-    depthStencilDesc.SampleDesc.Quality = m4xMsaaState ? (m4xMsaaQuality - 1) : 0;
-    depthStencilDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
-    depthStencilDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
-
-    D3D12_CLEAR_VALUE optClear;
-    optClear.Format = mDepthStencilFormat;
-    optClear.DepthStencil.Depth = 1.0f;
-    optClear.DepthStencil.Stencil = 0;
-
-    CD3DX12_HEAP_PROPERTIES heapProperties(D3D12_HEAP_TYPE_DEFAULT);
-
-    md3dDevice->CreateCommittedResource(
-        &heapProperties,
-        D3D12_HEAP_FLAG_NONE,
-        &depthStencilDesc,
-        D3D12_RESOURCE_STATE_COMMON,
-        &optClear,
-        IID_PPV_ARGS(&mDepthStencilBuffer)
-    );
-
-    D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc;
-    dsvDesc.Flags = D3D12_DSV_FLAG_NONE;
-    dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
-    dsvDesc.Format = mDepthStencilFormat;
-    dsvDesc.Texture2D.MipSlice = 0;
-    md3dDevice->CreateDepthStencilView(mDepthStencilBuffer, &dsvDesc, mDsvHeap->GetCPUDescriptorHandleForHeapStart());
-
-    CD3DX12_RESOURCE_BARRIER depthStencilBarrier = CD3DX12_RESOURCE_BARRIER::Transition(mDepthStencilBuffer,
-        D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_DEPTH_WRITE);
-
-    mCommandList->ResourceBarrier(1, &depthStencilBarrier);
-
-    mCommandList->Close();
-    ID3D12CommandList* cmdsLists[] = { mCommandList };
-    mCommandQueue->ExecuteCommandLists(_countof(cmdsLists), cmdsLists);
-
-    mScreenViewport.TopLeftX = 0;
-    mScreenViewport.TopLeftY = 0;
-    mScreenViewport.Width = static_cast<float>(800);
-    mScreenViewport.Height = static_cast<float>(600);
-    mScreenViewport.MinDepth = 0.0f;
-    mScreenViewport.MaxDepth = 1.0f;
-
-    mScissorRect = { 0, 0, 800, 600 };
-}

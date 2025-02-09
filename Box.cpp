@@ -80,7 +80,7 @@ void Box::Draw()
 	mCommandList->SetGraphicsRootDescriptorTable(0, mCbvHeap->GetGPUDescriptorHandleForHeapStart());
 	mCommandList->DrawIndexedInstanced(
 		mBoxGeo->DrawArgs["box"].IndexCount,
-		1, 0, 0);
+		1, 0, 0, 0);
 
 
 	// Transition de la back buffer vers l'état PRESENT
