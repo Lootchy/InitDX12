@@ -133,7 +133,15 @@ void d3dApp::OnResize()
 
     // Release the previous resources we will be recreating.
     for (int i = 0; i < SwapChainBufferCount; ++i)
+    {
+        if (mSwapChainBuffer[i] != nullptr)
+            mSwapChainBuffer[i]->Release();
         mSwapChainBuffer[i] = nullptr;
+    }
+
+    if (mDepthStencilBuffer != nullptr)
+        mDepthStencilBuffer->Release();
+
     mDepthStencilBuffer = nullptr;
 
     // Resize the swap chain.
