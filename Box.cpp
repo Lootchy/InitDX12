@@ -109,9 +109,9 @@ void Box::Draw()
 void Box::BuildBox()
 {
 	std::array<Vertex, 3> vertices = {
-		Vertex({ XMFLOAT3(-1.0f, -1.0f, -1.0f), XMFLOAT4(Colors::White) }),
-		Vertex({ XMFLOAT3(-1.0f, +1.0f, -1.0f), XMFLOAT4(Colors::Black) }),
-		Vertex({ XMFLOAT3(+1.0f, +1.0f, -1.0f), XMFLOAT4(Colors::Red) }),
+		Vertex({ XMFLOAT3(0.0f, 0.0f, 0.0f), XMFLOAT4(Colors::White) }),
+		Vertex({ XMFLOAT3(1.0f, 0.0f, 0.0f), XMFLOAT4(Colors::Black) }),
+		Vertex({ XMFLOAT3(0.0f, 1.0f, 0.0f), XMFLOAT4(Colors::Red) }),
 	};
 
 	std::array<std::uint16_t, 3> indices = {
@@ -124,10 +124,10 @@ void Box::BuildBox()
 	mBoxGeo = std::make_unique<MeshGeometry>();
 	mBoxGeo->Name = "boxGeo";
 
-	ThrowIfFailed(D3DCreateBlob(vbByteSize, &mBoxGeo->VertexBufferCPU));
+	D3DCreateBlob(vbByteSize, &mBoxGeo->VertexBufferCPU);
 	CopyMemory(mBoxGeo->VertexBufferCPU->GetBufferPointer(), vertices.data(), vbByteSize);
 
-	ThrowIfFailed(D3DCreateBlob(ibByteSize, &mBoxGeo->IndexBufferCPU));
+	D3DCreateBlob(ibByteSize, &mBoxGeo->IndexBufferCPU);
 	CopyMemory(mBoxGeo->IndexBufferCPU->GetBufferPointer(), indices.data(), ibByteSize);
 
 	mBoxGeo->VertexBufferGPU = d3dUtil::CreateDefaultBuffer(md3dDevice,
@@ -254,11 +254,11 @@ void Box::BuildRootSignature()
 	{
 		::OutputDebugStringA((char*)errorBlob->GetBufferPointer());
 	}
-	ThrowIfFailed(hr);
+	hr;
 
-	ThrowIfFailed(md3dDevice->CreateRootSignature(
+	md3dDevice->CreateRootSignature(
 		0,
 		serializedRootSig->GetBufferPointer(),
 		serializedRootSig->GetBufferSize(),
-		IID_PPV_ARGS(&mRootSignature)));
+		IID_PPV_ARGS(&mRootSignature));
 }
