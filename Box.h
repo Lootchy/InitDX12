@@ -32,12 +32,14 @@ private:
     std::unique_ptr<UploadBuffer<ObjectConstants>> mObjectCB = nullptr;
 
     float mTheta = 1.5f * XM_PI;
-    float mPhi = XM_PIDIV4;
+    float mPhi = XM_PI/3.5;
     float mRadius = 5.0f;
+    POINT mLastMousePos;
 
     XMFLOAT4X4 mWorld = MathHelper::Identity4x4();
     XMFLOAT4X4 mView = MathHelper::Identity4x4();
     XMFLOAT4X4 mProj = MathHelper::Identity4x4();
+
 
 public:
     Box(HINSTANCE hInstance);
@@ -51,5 +53,6 @@ public:
     void BuildDescriptorHeaps();
     void BuildConstantBuffers();
     void BuildRootSignature();
+    virtual void OnMouseMove(WPARAM btnState, int x, int y)override;
 };
 

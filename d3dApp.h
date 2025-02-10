@@ -31,6 +31,7 @@ protected:
     void CreateSwapChain();
     void CreateRtvAndDsvDescriptorHeaps();
     void CreateRenderTargetViews();
+    virtual void OnMouseMove(WPARAM btnState, int x, int y) { }
 
     HINSTANCE mhAppInst;
     HWND      mhMainWnd;

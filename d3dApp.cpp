@@ -34,16 +34,13 @@ int d3dApp::Run()
     MSG msg = {};
     while (msg.message != WM_QUIT)
     {
-        if (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE))
+        while (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE))
         {
             TranslateMessage(&msg);
             DispatchMessage(&msg);
         }
-        else
-        {
-            Update();
-            Draw();
-        }
+        Update();
+        Draw();
     }
     return static_cast<int>(msg.wParam);
 }
@@ -70,7 +67,7 @@ void d3dApp::Draw()
     mDirectCmdListAlloc->Reset();
     mCommandList->Reset(mDirectCmdListAlloc, nullptr);
 
-    // Transition de la back buffer vers l'état RENDER_TARGET
+    // Transition de la back buffer vers l'Ã©tat RENDER_TARGET
     CD3DX12_RESOURCE_BARRIER barrierToRenderTarget = CD3DX12_RESOURCE_BARRIER::Transition(
         mSwapChainBuffer[mCurrBackBuffer],
         D3D12_RESOURCE_STATE_PRESENT,
@@ -78,7 +75,7 @@ void d3dApp::Draw()
     );
     mCommandList->ResourceBarrier(1, &barrierToRenderTarget);
 
-    // Définir le viewport et le rectangle de découpage
+    // DÃ©finir le viewport et le rectangle de dÃ©coupage
     mCommandList->RSSetViewports(1, &mScreenViewport);
     mCommandList->RSSetScissorRects(1, &mScissorRect);
 
@@ -89,7 +86,7 @@ void d3dApp::Draw()
         mRtvDescriptorSize), DirectX::Colors::LightSteelBlue, 0, nullptr);
     mCommandList->ClearDepthStencilView(mDsvHeap->GetCPUDescriptorHandleForHeapStart(), D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, nullptr);
 
-    // Définir les cibles de rendu
+    // DÃ©finir les cibles de rendu
     CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(
         mRtvHeap->GetCPUDescriptorHandleForHeapStart(),
         mCurrBackBuffer,
@@ -98,7 +95,7 @@ void d3dApp::Draw()
     D3D12_CPU_DESCRIPTOR_HANDLE dsdew = mDsvHeap->GetCPUDescriptorHandleForHeapStart();
     mCommandList->OMSetRenderTargets(1, &rtvHandle, true, &dsdew);
 
-    // Transition de la back buffer vers l'état PRESENT
+    // Transition de la back buffer vers l'Ã©tat PRESENT
     CD3DX12_RESOURCE_BARRIER barrierToPresent = CD3DX12_RESOURCE_BARRIER::Transition(
         mSwapChainBuffer[mCurrBackBuffer],
         D3D12_RESOURCE_STATE_RENDER_TARGET,
@@ -109,11 +106,11 @@ void d3dApp::Draw()
     // Fermer la commande list
     mCommandList->Close();
 
-    // Exécuter les commandes
+    // ExÃ©cuter les commandes
     ID3D12CommandList* cmdsLists[] = { mCommandList };
     mCommandQueue->ExecuteCommandLists(_countof(cmdsLists), cmdsLists);
 
-    // Présenter la frame
+    // PrÃ©senter la frame
     mSwapChain->Present(0, 0);
     mCurrBackBuffer = (mCurrBackBuffer + 1) % SwapChainBufferCount;
 
