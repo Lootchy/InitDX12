@@ -138,14 +138,36 @@ void Box::Update()
 
 void Box::BuildBox()
 {
-	std::array<Vertex, 3> vertices = {
+	std::array<Vertex, 8> vertices = {
 		Vertex({ XMFLOAT3(0.0f, 0.0f, 0.0f), XMFLOAT4(Colors::White) }),
 		Vertex({ XMFLOAT3(1.0f, 0.0f, 0.0f), XMFLOAT4(Colors::Black) }),
 		Vertex({ XMFLOAT3(0.0f, 1.0f, 0.0f), XMFLOAT4(Colors::Red) }),
+		Vertex({ XMFLOAT3(1.0f, 1.0f, 0.0f), XMFLOAT4(Colors::Green) }),
+
+		Vertex({ XMFLOAT3(1.0f, 0.0f, 1.0f), XMFLOAT4(Colors::Black) }),
+		Vertex({ XMFLOAT3(1.0f, 1.0f, 1.0f), XMFLOAT4(Colors::Blue) }),
+		Vertex({ XMFLOAT3(0.0f, 0.0f, 1.0f), XMFLOAT4(Colors::Violet) }),
+		Vertex({ XMFLOAT3(0.0f, 1.0f, 1.0f), XMFLOAT4(Colors::Fuchsia) }),
 	};
 
-	std::array<std::uint16_t, 3> indices = {
-		1, 3, 2
+	std::array<std::uint16_t, 36> indices = {
+		0, 2, 1,
+		1, 2, 3,
+
+		1, 3, 4,
+		4, 3, 5,
+
+		4, 5, 6,
+		6, 5, 7,
+
+		6, 7, 0,
+		0, 7, 2,
+
+		2, 7, 3,
+		3, 7, 5,
+
+		0, 1, 6,
+		1, 4, 6
 	};
 
 	const UINT vbByteSize = (UINT)vertices.size() * sizeof(Vertex);
