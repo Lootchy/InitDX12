@@ -16,18 +16,22 @@ Box::~Box()
 bool Box::Init()
 {
 	d3dApp::Initialize();
-	mCommandList->Reset(mDirectCmdListAlloc, nullptr);
 	BuildDescriptorHeaps();
 	BuildConstantBuffers();
 	BuildRootSignature();
 	BuildShadersAndInputLayout();
-	BuildBox();
 	buildPSO();
 
+
+	XMMATRIX ProjMatrix = XMMatrixPerspectiveFovLH(XM_PI / 4.0f, 800/600, 0.000001f, 1000);
+	XMStoreFloat4x4(&mProj, ProjMatrix);
+
+	mDirectCmdListAlloc->Reset();
+	mCommandList->Reset(mDirectCmdListAlloc, nullptr);
+	BuildBox();
 	mCommandList->Close();
 	ID3D12CommandList* cmdsLists[] = { mCommandList };
 	mCommandQueue->ExecuteCommandLists(_countof(cmdsLists), cmdsLists);
-
 	FlushCommandQueue();
 
 	return true;
@@ -35,7 +39,8 @@ bool Box::Init()
 
 void Box::Draw()
 {
-	mCommandList->Reset(mDirectCmdListAlloc, mPSO);
+	mDirectCmdListAlloc->Reset();
+	mCommandList->Reset(mDirectCmdListAlloc, nullptr);
 
 	mCommandList->RSSetViewports(1, &mScreenViewport);
 	mCommandList->RSSetScissorRects(1, &mScissorRect);
@@ -68,9 +73,9 @@ void Box::Draw()
 	ID3D12DescriptorHeap* descriptorHeaps[] = { mCbvHeap };
 	mCommandList->SetDescriptorHeaps(_countof(descriptorHeaps), descriptorHeaps);
 
-	mCommandList->SetPipelineState(mPSO);
 	mCommandList->SetGraphicsRootSignature(mRootSignature);
-	
+	mCommandList->SetPipelineState(mPSO);
+
 	D3D12_VERTEX_BUFFER_VIEW qac = mBoxGeo->VertexBufferView();
 	mCommandList->IASetVertexBuffers(0, 1, &qac);
 	D3D12_INDEX_BUFFER_VIEW opiu = mBoxGeo->IndexBufferView();
@@ -214,7 +219,8 @@ void Box::buildPSO()
 	psoDesc.SampleDesc.Count = m4xMsaaState ? 4 : 1;
 	psoDesc.SampleDesc.Quality = m4xMsaaState ? (m4xMsaaQuality - 1) : 0;
 	psoDesc.DSVFormat = mDepthStencilFormat;
-	md3dDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&mPSO));
+	HRESULT hr = md3dDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&mPSO));
+
 }
 
 void Box::BuildDescriptorHeaps()

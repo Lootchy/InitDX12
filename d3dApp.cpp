@@ -67,6 +67,7 @@ void d3dApp::Update()
 
 void d3dApp::Draw()
 {
+    mDirectCmdListAlloc->Reset();
     mCommandList->Reset(mDirectCmdListAlloc, nullptr);
 
     // Transition de la back buffer vers l'état RENDER_TARGET
@@ -312,7 +313,7 @@ void d3dApp::FlushCommandQueue()
     // Wait until the GPU has completed commands up to this fence point.
     if (mFence->GetCompletedValue() < mCurrentFence)
     {
-        HANDLE eventHandle = CreateEventEx(nullptr, L"", false, EVENT_ALL_ACCESS);
+        HANDLE eventHandle = CreateEventEx(nullptr, nullptr, 0, EVENT_ALL_ACCESS);
 
         // Fire event when GPU hits current fence.  
         mFence->SetEventOnCompletion(mCurrentFence, eventHandle);
